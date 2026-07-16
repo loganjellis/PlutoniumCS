@@ -1,10 +1,14 @@
 #pragma once
 
 #ifdef _WIN32
-	#ifdef PLUTONIUM_CS_EXPORTS
-		#define PLUTONIUM_CS_API __declspec(dllexport)
+	#ifdef PLUTONIUM_CS_DLL
+		#ifdef PLUTONIUM_CS_EXPORTS
+			#define PLUTONIUM_CS_API __declspec(dllexport)
+		#else
+			#define PLUTONIUM_CS_API __declspec(dllimport)
+		#endif
 	#else
-		#define PLUTONIUM_CS_API __declspec(dllimport)
+		#define PLUTONIUM_CS_API
 	#endif
 #else
 	#define PLUTONIUM_CS_API
