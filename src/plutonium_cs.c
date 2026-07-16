@@ -83,6 +83,7 @@ void pluto_cs_shutdown()
 	// free the whole component type array
 	dynas_free(&component_types);
 
+	init = false;
 	vl_log(VL_SUCCESS, "PlutoniumCS properly shut down!\n");
 }
 
