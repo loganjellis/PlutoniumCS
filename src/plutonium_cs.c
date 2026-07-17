@@ -20,6 +20,8 @@ typedef struct component_type_info
 	size_t elem_size;
 	// init function (constructor-like)
 	pluto_cs_init_fn init;
+	// clone function
+	pluto_cs_clone_fn clone;
 	// type of component
 	int type;
 } component_type_info;
@@ -72,12 +74,12 @@ void pluto_cs_shutdown()
 		component_type_info *info = &component_types.data[i];
 
 		// free each component in the instances array:
-		for(size_t j = 0; j < info -> components.size; ++j)
-			free(info -> components.data[i]);
+		for(size_t j = 0; j < info->components.size; ++j)
+			free(info->components.data[j]);
 
 		// free the whole instances array
-		dynas_free(&info -> components);
-		dynas_free(&info -> objs);
+		dynas_free(&info->components);
+		dynas_free(&info->objs);
 	}
 
 	// free the whole component type array
@@ -99,7 +101,7 @@ static component_type_info *pluto_cs_find_component_type(int type)
 	return NULL;
 }
 
-int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn)
+int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn, pluto_cs_clone_fn clone_fn)
 {
 	if(!init)
 	{
@@ -110,6 +112,11 @@ int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn)
 	if(!init_fn)
 	{
 		vl_log(VL_ERROR, "Registering a component requires the init function to be a valid pointer!\n");
+		return 0;
+	}
+	if(!clone_fn)
+	{
+		vl_log(VL_ERROR, "Registering a component requires the clone function to be a valid pointer!\n");
 		return 0;
 	}
 
@@ -124,6 +131,7 @@ int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn)
 	component_type_info info = {
 		.elem_size = size_bytes,
 		.init = init_fn,
+		.clone = clone_fn,
 		.type = type,
 	};
 
@@ -135,6 +143,11 @@ int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn)
 	if(!info.components.data)
 	{
 		vl_log(VL_ERROR, "Failed to allocate memory for component array!\n");
+		return 0;
+	}
+	if(!info.objs.data)
+	{
+		vl_log(VL_ERROR, "Failed to allocate memory for object array!\n");
 		return 0;
 	}
 
@@ -174,7 +187,7 @@ void *pluto_cs_add_component(void *obj, int type)
 		return NULL;
 	}
 
-	// see if obj already contains this component type
+	// see if obj already contains the component type
 	if(pluto_cs_check_component(obj, type))
 	{
 		vl_log(VL_ERROR, "This object %p already contains this component type: %d\n", obj, type);
@@ -182,7 +195,7 @@ void *pluto_cs_add_component(void *obj, int type)
 	}
 
 	// init instance of type
-	void *component = malloc(type_info -> elem_size);
+	void *component = malloc(type_info->elem_size);
 	if(!component)
 	{
 		vl_log(VL_ERROR, "Failed to allocate memory for component!\n");
@@ -190,16 +203,18 @@ void *pluto_cs_add_component(void *obj, int type)
 	}
 
 	// add allocated pointer into instance array
-	dynas_add(&type_info -> components, component);
-	dynas_add(&type_info -> objs, obj);
+	dynas_add(&type_info->components, component);
+	dynas_add(&type_info->objs, obj);
 
 	// component was successfully allocated, init it
-	type_info -> init(component, obj);
+	type_info->init(component, obj);
+
+	vl_log(VL_SUCCESS, "Added component %d to obj %p\n", type, obj);
 
 	return component;
 }
 
-bool pluto_cs_check_component(void *obj, int type)
+bool pluto_cs_check_component(const void *const obj, int type)
 {
 	if(!init)
 	{
@@ -219,17 +234,17 @@ bool pluto_cs_check_component(void *obj, int type)
 		return false;
 
 	// see if object is paired with an instance of this component
-	for(size_t i = 0; i < info -> components.size; ++i)
+	for(size_t i = 0; i < info->components.size; ++i)
 	{
 		// match type of the current instance with pointer in the instance
-		if(info -> type == type && info -> objs.data[i] == obj)
+		if(info->type == type && info->objs.data[i] == obj)
 			return true;
 	}
 
 	return false;
 }
 
-void *pluto_cs_get_component(void *obj, int type)
+void *pluto_cs_get_component(const void *const obj, int type)
 {
 	if(!init)
 	{
@@ -249,11 +264,70 @@ void *pluto_cs_get_component(void *obj, int type)
 		return NULL;
 
 	// find pair of obj-component
-	for(size_t i = 0; i < info -> components.size; ++i)
+	for(size_t i = 0; i < info->components.size; ++i)
 	{
-		if(info -> type == type && info -> objs.data[i] == obj)
-			return info -> components.data[i];
+		if(info->type == type && info->objs.data[i] == obj)
+			return info->components.data[i];
 	}
 
 	return NULL;
+}
+
+int pluto_cs_clone_components(const void *const src, void *target)
+{
+	if(!init)
+	{
+		vl_log(VL_ERROR, "Cannot clone components, PlutoniumCS was never initialized!\n");
+		return 0;
+	}
+	if(!src)
+	{
+		vl_log(VL_ERROR, "Cannot clone components from a null source object!\n");
+		return 0;
+	}
+	if(!target)
+	{
+		vl_log(VL_ERROR, "Cannot add cloned components to a null target!\n");
+		return 0;
+	}
+
+	// find every instance of 'src' and add components to 'target'
+	for(size_t i = 0; i < component_types.size; ++i)
+	{
+		// get info at i
+		component_type_info *info = &component_types.data[i];
+		if(!info)
+		{
+			vl_log(VL_ERROR, "info is NULL!\n");
+			return 0;
+		}
+
+		// now iterate over obj-component arrays
+		for(size_t j = 0; j < info->components.size; ++j)
+		{
+			// match pointer to src
+			if(info->objs.data[j] == src)
+			{
+				// get source component
+				const void *const src_comp = pluto_cs_get_component(src, info->type);
+				if(!src_comp)
+				{
+					vl_log(VL_ERROR, "src_comp is NULL!\n");
+					return 0;
+				}
+
+				// when pointer matches, add the same component to the target obj
+				void *target_comp = pluto_cs_add_component(target, info->type);
+				if(!target_comp)
+					return 0;
+
+				// run the clone function
+				info->clone(src_comp, target_comp);
+
+				vl_log(VL_SUCCESS, "Cloned component %d and added to obj %p\n", info->type, target);
+			}
+		}
+	}
+
+	return 1;
 }

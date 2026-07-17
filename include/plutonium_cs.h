@@ -27,6 +27,15 @@
 typedef void (*pluto_cs_init_fn) (void *component, void *owner);
 
 /**
+  A component's clone function copies the component's data/attributes
+  into another component of the same type.
+
+  @param src The original component that was cloned.
+  @param target The component obtaining the cloned data/attributes.
+*/
+typedef void (*pluto_cs_clone_fn) (const void *const src, void *target);
+
+/**
   Initializes the PlutoniumCS library.
 
   @return 1 on success, 0 on failure.
@@ -49,10 +58,13 @@ PLUTONIUM_CS_API void pluto_cs_shutdown(void);
   example, sizeof(my_component).
   @param init_fn The init function for the component. See
   pluto_cs_init_fn.
+  @param clone_fn The clone function for the component. See
+  pluto_cs_clone_fn.
 
   @see pluto_cs_init_fn
+  @see pluto_cs_clone_fn
 */
-PLUTONIUM_CS_API int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn);
+PLUTONIUM_CS_API int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn, pluto_cs_clone_fn clone_fn);
 
 /**
   Adds a component to an object.
@@ -71,11 +83,22 @@ PLUTONIUM_CS_API void *pluto_cs_add_component(void *obj, int type);
   Returns whether or not an object owns a component
   of the specified type.
 */
-PLUTONIUM_CS_API bool pluto_cs_check_component(void *obj, int type);
+PLUTONIUM_CS_API bool pluto_cs_check_component(const void *const obj, int type);
 
 /**
   Returns an object's component of the matching type,
   if it is found, and returns NULL if the component
   isn't found.
 */
-PLUTONIUM_CS_API void *pluto_cs_get_component(void *obj, int type);
+PLUTONIUM_CS_API void *pluto_cs_get_component(const void *const obj, int type);
+
+/**
+  Clones components from one object and adds them
+  to another object.
+
+  @param src The source object to clone.
+  @param target The object to add the cloned components to.
+
+  @return 1 on success, 0 on failure.
+*/
+PLUTONIUM_CS_API int pluto_cs_clone_components(const void *const src, void *target);
