@@ -22,6 +22,3 @@ endif()
 target_include_directories(plutonium_cs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_link_libraries(plutonium_cs PUBLIC vibrant_logs dynamic_array_spellbook)
-
-# testing lib | you can safely remove it:
-add_subdirectory(test)
