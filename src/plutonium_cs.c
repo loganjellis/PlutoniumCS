@@ -257,7 +257,7 @@ void *pluto_cs_get_component(const void *const obj, int type)
 		vl_log(VL_ERROR, "Cannot obtain a component from a null object!\n");
 		return NULL;
 	}
-
+	
 	// if obj was never registered, automatic false
 	component_type_info *info = pluto_cs_find_component_type(type);
 	if(!info)

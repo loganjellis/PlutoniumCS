@@ -1,17 +1,17 @@
 #pragma once
 
 #ifdef _WIN32
-	#ifdef PLUTONIUM_CS_DLL
-		#ifdef PLUTONIUM_CS_EXPORTS
-			#define PLUTONIUM_CS_API __declspec(dllexport)
+	#ifdef PLUTO_CS_DLL
+		#ifdef PLUTO_CS_EXPORTS
+			#define PLUTO_CS_API __declspec(dllexport)
 		#else
-			#define PLUTONIUM_CS_API __declspec(dllimport)
+			#define PLUTO_CS_API __declspec(dllimport)
 		#endif
 	#else
-		#define PLUTONIUM_CS_API
+		#define PLUTO_CS_API
 	#endif
 #else
-	#define PLUTONIUM_CS_API
+	#define PLUTO_CS_API
 #endif
 
 /**
@@ -40,20 +40,21 @@ typedef void (*pluto_cs_clone_fn) (const void *const src, void *target);
 
   @return 1 on success, 0 on failure.
 */
-PLUTONIUM_CS_API int pluto_cs_init(void);
+PLUTO_CS_API int pluto_cs_init(void);
 /**
   Shuts down the PlutoniumCS library.
 */
-PLUTONIUM_CS_API void pluto_cs_shutdown(void);
+PLUTO_CS_API void pluto_cs_shutdown(void);
 
 /**
   Registers component type info for the component system.
 
   @important You must call this function for every
-  type of component required in your program.
+  type of component/component extension required in your program.
 
-  @param type The type of component to register. You should
-  only register each type once.
+  @param type The type identifier of the component/component extension to
+  register. You should only register each type once. No two
+  components/component extensions can have the same type.
   @param size_bytes The size of the component in bytes. For
   example, sizeof(my_component).
   @param init_fn The init function for the component. See
@@ -64,10 +65,10 @@ PLUTONIUM_CS_API void pluto_cs_shutdown(void);
   @see pluto_cs_init_fn
   @see pluto_cs_clone_fn
 */
-PLUTONIUM_CS_API int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn, pluto_cs_clone_fn clone_fn);
+PLUTO_CS_API int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn, pluto_cs_clone_fn clone_fn);
 
 /**
-  Adds a component to an object.
+  Adds a component/component extension to an object.
 
   @note When calling this function, the 'obj' pointer
   is expected to be handled by the user. Additionally,
@@ -77,20 +78,20 @@ PLUTONIUM_CS_API int pluto_cs_register(int type, size_t size_bytes, pluto_cs_ini
 
   @return A valid component pointer on success, NULL on failure.
 */
-PLUTONIUM_CS_API void *pluto_cs_add_component(void *obj, int type);
+PLUTO_CS_API void *pluto_cs_add_component(void *obj, int type);
 
 /**
   Returns whether or not an object owns a component
   of the specified type.
 */
-PLUTONIUM_CS_API bool pluto_cs_check_component(const void *const obj, int type);
+PLUTO_CS_API bool pluto_cs_check_component(const void *const obj, int type);
 
 /**
   Returns an object's component of the matching type,
   if it is found, and returns NULL if the component
   isn't found.
 */
-PLUTONIUM_CS_API void *pluto_cs_get_component(const void *const obj, int type);
+PLUTO_CS_API void *pluto_cs_get_component(const void *const obj, int type);
 
 /**
   Clones components from one object and adds them
@@ -101,4 +102,4 @@ PLUTONIUM_CS_API void *pluto_cs_get_component(const void *const obj, int type);
 
   @return 1 on success, 0 on failure.
 */
-PLUTONIUM_CS_API int pluto_cs_clone_components(const void *const src, void *target);
+PLUTO_CS_API int pluto_cs_clone_components(const void *const src, void *target);

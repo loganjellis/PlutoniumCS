@@ -16,7 +16,7 @@ FetchContent_MakeAvailable(vibrant_logs dynamic_array_spellbook)
 add_library(plutonium_cs "${CMAKE_CURRENT_SOURCE_DIR}/src/plutonium_cs.c")
 
 if(BUILD_SHARED_LIBS)
-	target_compile_definitions(plutonium_cs PRIVATE PLUTONIUM_CS_EXPORTS> PUBLIC PLUTONIUM_CS_DLL)
+	target_compile_definitions(plutonium_cs PRIVATE PLUTO_CS_EXPORTS> PUBLIC PLUTO_CS_DLL)
 endif()
 
 target_include_directories(plutonium_cs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
