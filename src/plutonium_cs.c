@@ -90,7 +90,7 @@ void pluto_cs_shutdown()
 }
 
 // get component type info based on a type
-static component_type_info *pluto_cs_find_component_type(int type)
+static component_type_info *find_component_type(int type)
 {
 	for(size_t i = 0; i < component_types.size; ++i)
 	{
@@ -108,20 +108,14 @@ int pluto_cs_register(int type, size_t size_bytes, pluto_cs_init_fn init_fn, plu
 		vl_log(VL_ERROR, "Cannot register component, PlutoniumCS was never initialized!\n");
 		return 0;
 	}
-
 	if(!init_fn)
 	{
 		vl_log(VL_ERROR, "Registering a component requires the init function to be a valid pointer!\n");
 		return 0;
 	}
-	if(!clone_fn)
-	{
-		vl_log(VL_ERROR, "Registering a component requires the clone function to be a valid pointer!\n");
-		return 0;
-	}
 
 	// see if type already registered
-	if(pluto_cs_find_component_type(type))
+	if(find_component_type(type))
 	{
 		vl_log(VL_ERROR, "Component type already registered: %d\n", type);
 		return 0;
@@ -172,7 +166,6 @@ void *pluto_cs_add_component(void *obj, int type)
 		vl_log(VL_ERROR, "Cannot add component, PlutoniumCS was never initialized!\n");
 		return NULL;
 	}
-
 	if(!obj)
 	{
 		vl_log(VL_ERROR, "Cannot add component to a null object!\n");
@@ -180,10 +173,10 @@ void *pluto_cs_add_component(void *obj, int type)
 	}
 
 	// see if component type registered
-	component_type_info *type_info = pluto_cs_find_component_type(type);
+	component_type_info *type_info = find_component_type(type);
 	if(!type_info)
 	{
-		vl_log(VL_ERROR, "Component type was never registered: %d\n", type);
+		vl_log(VL_ERROR, "Component type was never registered: %d!\n", type);
 		return NULL;
 	}
 
@@ -214,6 +207,49 @@ void *pluto_cs_add_component(void *obj, int type)
 	return component;
 }
 
+int pluto_cs_remove_component(void *obj, int type)
+{
+	if(!init)
+	{
+		vl_log(VL_ERROR, "Cannot remove component, PlutoniumCS was never initialized!\n");
+		return 0;
+	}
+	if(!obj)
+	{
+		vl_log(VL_ERROR, "Cannot remove component from null object!\n");
+		return 0;
+	}
+
+	// see if type registered
+	component_type_info *type_info = find_component_type(type);
+	if(!type_info)
+	{
+		vl_log(VL_ERROR, "Component type was never registered: %d!\n", type);
+		return 0;
+	}
+
+	// check to see if obj has the component
+	if(!pluto_cs_check_component(obj, type))
+	{
+		vl_log(VL_ERROR, "Cannot remove component %d from object %p because it doesn't own the component.\n", type, obj);
+		return 0;
+	}
+
+	// get component from object
+	void *component = pluto_cs_get_component(obj, type);
+
+	// remove component from array
+	dynas_remove_item(&type_info->components, component);
+	dynas_remove_item(&type_info->objs, obj);
+
+	// free component (was allocated in add_component(...))
+	free(component);
+
+	vl_log(VL_SUCCESS, "Removed component %d from obj %p!\n", type, obj);
+
+	return 1;
+}
+
 bool pluto_cs_check_component(const void *const obj, int type)
 {
 	if(!init)
@@ -221,7 +257,6 @@ bool pluto_cs_check_component(const void *const obj, int type)
 		vl_log(VL_ERROR, "Cannot check for a component, PlutoniumCS was never initialized!\n");
 		return false;
 	}
-
 	if(!obj)
 	{
 		vl_log(VL_ERROR, "Cannot check for a component on a null object!\n");
@@ -229,7 +264,7 @@ bool pluto_cs_check_component(const void *const obj, int type)
 	}
 
 	// if obj was never registered, automatic false
-	component_type_info *info = pluto_cs_find_component_type(type);
+	component_type_info *info = find_component_type(type);
 	if(!info)
 		return false;
 
@@ -251,7 +286,6 @@ void *pluto_cs_get_component(const void *const obj, int type)
 		vl_log(VL_ERROR, "Cannot obtain component, PlutoniumCS was never initialized!\n");
 		return NULL;
 	}
-
 	if(!obj)
 	{
 		vl_log(VL_ERROR, "Cannot obtain a component from a null object!\n");
@@ -259,13 +293,14 @@ void *pluto_cs_get_component(const void *const obj, int type)
 	}
 	
 	// if obj was never registered, automatic false
-	component_type_info *info = pluto_cs_find_component_type(type);
+	component_type_info *info = find_component_type(type);
 	if(!info)
 		return NULL;
 
 	// find pair of obj-component
 	for(size_t i = 0; i < info->components.size; ++i)
 	{
+		// if type and object pointer match, return that component
 		if(info->type == type && info->objs.data[i] == obj)
 			return info->components.data[i];
 	}
@@ -273,7 +308,66 @@ void *pluto_cs_get_component(const void *const obj, int type)
 	return NULL;
 }
 
-int pluto_cs_clone_components(const void *const src, void *target)
+int pluto_cs_clone_single_component(const void *const src, void *target, int type)
+{
+	if(!init)
+	{
+		vl_log(VL_ERROR, "Cannot clone component, PlutoniumCS was never initialized!\n");
+		return 0;
+	}
+	if(!src)
+	{
+		vl_log(VL_ERROR, "Cannot clone component from a null source object!\n");
+		return 0;
+	}
+	if(!target)
+	{
+		vl_log(VL_ERROR, "Cannot add cloned component to a null target!\n");
+		return 0;
+	}
+
+	vl_log(VL_INFO, "Cloning single component %d on source object %p:\n", type, src);
+
+	// find instance of 'src' with the given component type
+	for(size_t i = 0; i < component_types.size; ++i)
+	{
+		// get info at i
+		component_type_info *info = &component_types.data[i];
+
+		// now iterate over obj-component arrays
+		for(size_t j = 0; j < info->components.size; ++j)
+		{
+			// match pointer to src
+			if(info->objs.data[i] == src)
+			{
+				// match type first
+				if(info->type == type)
+				{
+					/* get source component (no need to check
+					   if it's NULL or not since the if-blocks
+					   above guarantee it won't be NULL)
+					*/
+					const void *const src_comp = pluto_cs_get_component(src, info->type);
+
+					// when pointer and type match, add only that component to the target
+					void *target_comp = pluto_cs_add_component(target, info->type);
+
+					// if added successfully, return successfully
+					if(target_comp)
+					{
+						vl_log(VL_INFO, "   ^ Cloned component %d and added to obj %p!\n", type, target);
+						return 1;
+					}
+				}
+			}
+		}
+	}
+
+	vl_log(VL_INFO, "Done cloning!\n");
+
+	return 0;
+}
+int pluto_cs_clone_all_components(const void *const src, void *target)
 {
 	if(!init)
 	{
@@ -291,16 +385,13 @@ int pluto_cs_clone_components(const void *const src, void *target)
 		return 0;
 	}
 
+	vl_log(VL_INFO, "Cloning all components on source object %p:\n", src);
+
 	// find every instance of 'src' and add components to 'target'
 	for(size_t i = 0; i < component_types.size; ++i)
 	{
 		// get info at i
 		component_type_info *info = &component_types.data[i];
-		if(!info)
-		{
-			vl_log(VL_ERROR, "info is NULL!\n");
-			return 0;
-		}
 
 		// now iterate over obj-component arrays
 		for(size_t j = 0; j < info->components.size; ++j)
@@ -308,26 +399,28 @@ int pluto_cs_clone_components(const void *const src, void *target)
 			// match pointer to src
 			if(info->objs.data[j] == src)
 			{
-				// get source component
+				// get source component (guaranteed to be non-null pointer)
 				const void *const src_comp = pluto_cs_get_component(src, info->type);
-				if(!src_comp)
-				{
-					vl_log(VL_ERROR, "src_comp is NULL!\n");
-					return 0;
-				}
 
 				// when pointer matches, add the same component to the target obj
 				void *target_comp = pluto_cs_add_component(target, info->type);
 				if(!target_comp)
 					return 0;
 
-				// run the clone function
-				info->clone(src_comp, target_comp);
+				// run the clone function (if set)
+				if(info->clone)
+					info->clone(src_comp, target_comp);
+				// else, just copy normally
+				else
+					// copy src_comp into target_comp using the size in bytes set in pluto_cs_register(...):
+					memcpy(target_comp, src_comp, info->elem_size);
 
-				vl_log(VL_SUCCESS, "Cloned component %d and added to obj %p\n", info->type, target);
+				vl_log(VL_INFO, "   ^ Cloned component %d and added to obj %p!\n", info->type, target);
 			}
 		}
 	}
+
+	vl_log(VL_INFO, "Done cloning all components!\n");
 
 	return 1;
 }
